@@ -506,6 +506,7 @@
   function syncInspector() {
     const item = items.get(selectedId);
     inspector.hidden = !item;
+    $('#exp-item').disabled = !item;
     if (!item) return;
     for (const section of inspector.querySelectorAll('[data-for]')) section.hidden = section.dataset.for !== item.type;
     const size = `${cells(item.w)} × ${cells(item.h)} cells`;
@@ -955,7 +956,7 @@
   });
 
   // ---------- Tray ----------
-  const trayButtons = { art: $('#tray-art'), eq: $('#tray-eq') };
+  const trayButtons = { art: $('#tray-art'), eq: $('#tray-eq'), export: $('#tray-export') };
 
   function openPop(panel) {
     pop.hidden = false;
@@ -1184,6 +1185,96 @@
     tapToPlace(btn, place);
     $('#pop-eq').append(btn);
   }
+
+  // ---------- SVG export ----------
+  const xmlEsc = str => String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  // One self-contained SVG: paper and dots (optional), every item, then the ink on top.
+  // 1 SVG unit = 1 canvas pixel, cropped to what's actually there.
+  function buildSvg(list, strokes, withGrid) {
+    let x0 = Infinity;
+    let y0 = Infinity;
+    let x1 = -Infinity;
+    let y1 = -Infinity;
+    const grow = (a, b, c, d) => { x0 = Math.min(x0, a); y0 = Math.min(y0, b); x1 = Math.max(x1, c); y1 = Math.max(y1, d); };
+    for (const item of list) grow(item.x, item.y, item.x + item.w, item.y + item.h);
+    for (const stroke of strokes) grow(...GI.bounds(stroke));
+    if (!Number.isFinite(x0)) return null;
+    x0 = Math.max(0, Math.floor((x0 - CELL) / CELL) * CELL);
+    y0 = Math.max(0, Math.floor((y0 - CELL) / CELL) * CELL);
+    x1 = Math.min(WORLD_WIDTH, Math.ceil((x1 + CELL) / CELL) * CELL);
+    y1 = Math.min(WORLD_HEIGHT, Math.ceil((y1 + CELL) / CELL) * CELL);
+    const w = x1 - x0;
+    const h = y1 - y0;
+
+    const parts = [];
+    if (withGrid) {
+      parts.push(
+        `<defs><pattern id="dots" x="-12" y="-12" width="${CELL}" height="${CELL}" patternUnits="userSpaceOnUse"><circle cx="12" cy="12" r="1.5" fill="#cfc9ba"/></pattern></defs>`,
+        `<rect x="${x0}" y="${y0}" width="${w}" height="${h}" fill="#f8f6f0"/>`,
+        `<rect x="${x0}" y="${y0}" width="${w}" height="${h}" fill="url(#dots)"/>`
+      );
+    }
+
+    for (const item of [...list].sort((a, b) => a.z - b.z)) {
+      const at = `transform="translate(${item.x} ${item.y})"`;
+      if (item.type === 'art') {
+        const blend = withGrid ? ' style="mix-blend-mode:multiply"' : '';
+        parts.push(`<image x="${item.x}" y="${item.y}" width="${item.w}" height="${item.h}" href="${item.canvas.toDataURL('image/jpeg', 0.95)}"${blend}><title>${xmlEsc(sceneById[item.scene].title)}</title></image>`);
+      } else if (item.type === 'eq') {
+        if (!item.parsed) item.parsed = GM.parseAll(item.text);
+        parts.push(`<g ${at}>${GM.plotSvg({
+          width: item.w, height: item.h, cpu: item.cpu, cell: CELL, rough: item.rough, seed: item.wob,
+          axes: item.axes, ticks: item.ticks, labels: item.labels, parsed: item.parsed
+        })}</g>`);
+      } else {
+        parts.push(`<g ${at}>${GM.scribbleSvg({
+          width: item.w, height: item.h, text: item.text, size: item.size,
+          color: item.color, rough: item.rough, seed: item.wob, cell: CELL
+        })}</g>`);
+      }
+    }
+
+    if (strokes.length) {
+      parts.push('<g id="ink">');
+      for (const s of strokes) {
+        parts.push(`<path d="${GI.pathD(s)}" fill="${s.c}"${s.h ? ' opacity="0.35" style="mix-blend-mode:multiply"' : ''}/>`);
+      }
+      parts.push('</g>');
+    }
+
+    return `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="${x0} ${y0} ${w} ${h}"><title>Art Room — Art Grid</title>${parts.join('')}</svg>\n`;
+  }
+
+  function download(markup, name) {
+    const url = URL.createObjectURL(new Blob([markup], { type: 'image/svg+xml;charset=utf-8' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  function exportBoard() {
+    const svg = buildSvg([...items.values()].filter(i => i.type !== 'text' || i.text.trim()), ink, $('#exp-grid').checked);
+    if (!svg) { toast('Nothing on the board yet.'); return; }
+    download(svg, 'art-grid.svg');
+  }
+
+  function exportItem() {
+    const item = items.get(selectedId);
+    if (!item) return;
+    // Ink drawn over the item travels with it.
+    const over = ink.filter(s => {
+      const [a, b, c, d] = GI.bounds(s);
+      return c >= item.x && a <= item.x + item.w && d >= item.y && b <= item.y + item.h;
+    });
+    const name = item.type === 'art' ? `${item.scene}-${item.seed}` : item.type === 'text' ? 'scribble' : 'equation-sketch';
+    download(buildSvg([item], over, $('#exp-grid').checked), `${name}.svg`);
+  }
+
+  $('#exp-board').addEventListener('click', exportBoard);
+  $('#exp-item').addEventListener('click', exportItem);
 
   // ---------- Start ----------
   window.addEventListener('resize', apply);

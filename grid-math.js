@@ -669,6 +669,60 @@
     });
   }
 
+
+  // ---------- SVG export ----------
+  // A stand-in for a canvas 2D context that writes SVG instead of pixels, so the plots and the
+  // scribbled text export from the very same drawing code that paints the screen.
+  let clipId = 0;
+  const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+  function svgRecorder() {
+    const out = [];
+    const open = [];
+    let d = '';
+    const f = n => +n.toFixed(1);
+    const common = ctx => `${ctx.globalAlpha < 1 ? ` opacity="${f(ctx.globalAlpha * 100) / 100}"` : ''}`;
+    const ctx = {
+      strokeStyle: '#000', fillStyle: '#000', lineWidth: 1, globalAlpha: 1,
+      lineJoin: 'miter', lineCap: 'butt', font: '10px sans-serif', textAlign: 'left', textBaseline: 'alphabetic',
+      setTransform() {}, clearRect() {},
+      save() { open.push(0); },
+      restore() { for (let k = open.pop() || 0; k > 0; k--) out.push('</g>'); },
+      beginPath() { d = ''; },
+      moveTo(x, y) { d += `M${f(x)} ${f(y)}`; },
+      lineTo(x, y) { d += `L${f(x)} ${f(y)}`; },
+      rect(x, y, w, h) { d += `M${f(x)} ${f(y)}h${f(w)}v${f(h)}h${f(-w)}z`; },
+      arc(x, y, r) { d += `M${f(x - r)} ${f(y)}a${f(r)} ${f(r)} 0 1 0 ${f(2 * r)} 0a${f(r)} ${f(r)} 0 1 0 ${f(-2 * r)} 0z`; },
+      clip() {
+        const id = `gm-clip-${clipId++}`;
+        out.push(`<clipPath id="${id}"><path d="${d}"/></clipPath><g clip-path="url(#${id})">`);
+        if (open.length) open[open.length - 1]++;
+      },
+      stroke() {
+        out.push(`<path d="${d}" fill="none" stroke="${ctx.strokeStyle}" stroke-width="${f(ctx.lineWidth)}" stroke-linecap="${ctx.lineCap === 'butt' ? 'butt' : ctx.lineCap}" stroke-linejoin="${ctx.lineJoin}"${common(ctx)}/>`);
+      },
+      fill() { out.push(`<path d="${d}" fill="${ctx.fillStyle}"${common(ctx)}/>`); },
+      fillRect(x, y, w, h) { out.push(`<rect x="${f(x)}" y="${f(y)}" width="${f(w)}" height="${f(h)}" fill="${ctx.fillStyle}"${common(ctx)}/>`); },
+      fillText(text, x, y) {
+        const size = parseFloat(ctx.font) || 12;
+        const family = ctx.font.replace(/^[^ ]+ /, '').replace(/"/g, "'");
+        const anchor = { left: 'start', center: 'middle', right: 'end', start: 'start', end: 'end' }[ctx.textAlign] || 'start';
+        const baseline = { top: 'hanging', middle: 'central', hanging: 'hanging' }[ctx.textBaseline];
+        out.push(`<text x="${f(x)}" y="${f(y)}" font-size="${size}" font-family="${esc(family)}" fill="${ctx.fillStyle}" text-anchor="${anchor}"${baseline ? ` dominant-baseline="${baseline}"` : ''}${common(ctx)}>${esc(text)}</text>`);
+      }
+    };
+    return { ctx, markup: () => out.join('') };
+  }
+
+  function toSvg(draw, opts) {
+    const rec = svgRecorder();
+    draw({ getContext: () => rec.ctx }, { ...opts, ratio: 1, dots: false });
+    return rec.markup();
+  }
+
+  const plotSvg = opts => toSvg(drawPlot, opts);
+  const scribbleSvg = opts => toSvg(drawScribble, opts);
+
   // cpu = grid cells per graph unit; cells = default size [w, h] in grid cells.
   const PRESETS = [
     { id: 'wave', name: 'Wave', cpu: 2, cells: [24, 20], text: 'y = 2sin(x)\ny = 0.5cos(3x) - 3' },
@@ -681,5 +735,5 @@
     { id: 'circles', name: 'Circles', cpu: 2, cells: [20, 20], text: '(2cos(t), 2sin(t))\n(4cos(t), 4sin(t))\n(cos(t) + 2, sin(t) - 2)' }
   ];
 
-  window.GridMath = { parseAll, drawPlot, drawScribble, layoutScribble, PRESETS, COLORS };
+  window.GridMath = { parseAll, drawPlot, drawScribble, layoutScribble, plotSvg, scribbleSvg, PRESETS, COLORS };
 })();

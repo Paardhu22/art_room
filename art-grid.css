@@ -508,3 +508,15 @@ html:has(.art-grid-body) { overscroll-behavior: none; }
   .pop-art { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
   .pop-art span { font-size: 10px; }
 }
+
+/* ---------- Export ---------- */
+.pop-export { display: flex; gap: 8px; margin-bottom: 12px; }
+.pop-export .insp-btn { flex: 1; padding: 12px 10px; }
+.pop-export .insp-btn:disabled { opacity: 0.4; cursor: default; }
+.pop-check { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer; }
+.pop-check input { accent-color: var(--olive); }
+
+@media (max-width: 700px) {
+  .grid-tray { gap: 2px; }
+  .tray-btn { padding: 8px 10px; }
+}

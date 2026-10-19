@@ -95,6 +95,14 @@
       <p class="pop-title">JavaScript artworks <span>drag one anywhere on the canvas, or tap to place</span></p>
       <div class="pop-art" id="pop-art"></div>
     </section>
+    <section data-panel="export" hidden>
+      <p class="pop-title">Download as SVG <span>Vector, so lines stay sharp at any size. Artworks are embedded as images.</span></p>
+      <div class="pop-export">
+        <button class="insp-btn" id="exp-board" type="button">Whole board</button>
+        <button class="insp-btn" id="exp-item" type="button" disabled>Selected item</button>
+      </div>
+      <label class="pop-check"><input type="checkbox" id="exp-grid" checked> Include paper and dot grid</label>
+    </section>
     <section data-panel="eq" hidden>
       <p class="pop-title">Equations <span>drag a sketch onto the canvas, or tap to place</span></p>
       <div class="pop-eq" id="pop-eq"></div>
@@ -147,6 +155,10 @@
     <button class="tray-btn" id="tray-pen" type="button" aria-pressed="false" aria-controls="pen-bar">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21c3 0 4-3 5-5l9.5-9.5a2.1 2.1 0 0 0-3-3L5 13c-2 1-2 5-2 8z"/><path d="M14 6l4 4"/></svg>
       <span>Pen</span>
+    </button>
+    <button class="tray-btn" id="tray-export" type="button" aria-expanded="false" aria-controls="tray-pop">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 11l5 5 5-5M5 20h14"/></svg>
+      <span>Export</span>
     </button>
     <span class="tray-sep" aria-hidden="true"></span>
     <span class="tray-zoomset">

@@ -106,5 +106,22 @@
     return false;
   }
 
-  window.GridInk = { pathD, hits };
+  // [minX, minY, maxX, maxY] including the pen's thickness.
+  function bounds(stroke) {
+    const n = count(stroke);
+    const pad = (stroke.h ? stroke.w : stroke.w * 1.65) / 2 + 1;
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (let i = 0; i < n; i++) {
+      minX = Math.min(minX, stroke.p[i * 3]);
+      maxX = Math.max(maxX, stroke.p[i * 3]);
+      minY = Math.min(minY, stroke.p[i * 3 + 1]);
+      maxY = Math.max(maxY, stroke.p[i * 3 + 1]);
+    }
+    return [minX - pad, minY - pad, maxX + pad, maxY + pad];
+  }
+
+  window.GridInk = { pathD, hits, bounds };
 })();

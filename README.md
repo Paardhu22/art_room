@@ -25,7 +25,7 @@ Reload the browser after editing. If that port is occupied, use `PORT=4301 npm s
 - Full artwork viewer with previous/next controls, zoom, and original-image links.
 - Escape to close, arrow keys to browse, focus restoration, and native modal focus containment.
 - Pure warm light theme; layout preferences are saved in this browser.
-- Art Grid page: an empty, large (finite) dot-grid canvas. Drag JavaScript artworks (drawn live, not images) onto it, add rough hand-drawn equation plots like `y = sin(x)`, or type scribbled handwriting (double-click anywhere or use Write). Everything snaps to the dots, and the layout is saved in this browser.
+- Art Grid page: an empty, large (finite) dot-grid canvas. Drag JavaScript artworks (drawn live, not images) onto it, add rough hand-drawn equation plots like `y = sin(x)`, type scribbled handwriting (double-click anywhere or use Write), and annotate with a pressure-sensitive pen. Everything snaps to the dots, works with touch and stylus, and the layout is saved in this browser. Export the whole board or one item as SVG.
 - Responsive WebP images and reduced-motion support.
 - Nine live JavaScript sketches, with editable seeds and full-size PNG export.
 
