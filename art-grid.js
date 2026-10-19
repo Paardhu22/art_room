@@ -26,8 +26,20 @@
   const toastEl = $('#grid-toast');
   const GM = window.GridMath;
 
+  const GI = window.GridInk;
+  const penBar = $('#pen-bar');
+
   world.style.width = `${WORLD_WIDTH}px`;
   world.style.height = `${WORLD_HEIGHT}px`;
+
+  // Ink lives in its own SVG layer above the items, in canvas coordinates.
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+  const inkSvg = document.createElementNS(SVG_NS, 'svg');
+  inkSvg.setAttribute('class', 'ink-layer');
+  inkSvg.setAttribute('width', WORLD_WIDTH);
+  inkSvg.setAttribute('height', WORLD_HEIGHT);
+  inkSvg.setAttribute('aria-hidden', 'true');
+  world.append(inkSvg);
 
   // JavaScript artworks = the collection entries that have a live sketch.
   const scenes = (window.ARTWORKS || []).filter(a => a.sketch).map(a => ({
@@ -49,6 +61,18 @@
   let zCounter = 1;
   let uid = 0;
   const items = new Map();
+
+  // Pen state. Strokes are plain data (see grid-ink.js); their <path>s are tracked on the side.
+  let ink = [];
+  const inkEls = new WeakMap();
+  let tool = 'select'; // 'select' | 'pen' | 'highlighter' | 'eraser'
+  let penLocked = false; // "Move items" was picked on purpose, so the pen stops auto-switching
+  let penBarOpen = false;
+  let fingerInk = false;
+  let penToastShown = false;
+  const inkStyle = { color: GM.COLORS[0], size: 1 };
+  const PEN_SIZES = [1.6, 3, 6]; // screen pixels
+  const MARKER_SIZES = [12, 20, 32];
 
   const rand32 = () => (crypto.getRandomValues(new Uint32Array(1))[0] || 1);
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
@@ -72,7 +96,8 @@
       try {
         const data = {
           view: { panX, panY, scale },
-          items: [...items.values()].map(({ el, canvas, parsed, token, ...rest }) => rest)
+          items: [...items.values()].map(({ el, canvas, parsed, token, ...rest }) => rest),
+          ink
         };
         localStorage.setItem(STORE_KEY, JSON.stringify(data));
       } catch (_) { /* storage can be unavailable; the canvas still works */ }
@@ -86,6 +111,76 @@
     } catch (_) {
       return null;
     }
+  }
+
+  // ---------- Undo / redo ----------
+  // Snapshots of everything on the canvas, taken just before a change.
+  const undoStack = [];
+  const redoStack = [];
+  let coalesceTimer = 0;
+
+  const snapshot = () => ({
+    items: [...items.values()].map(({ el, canvas, parsed, token, ...rest }) => ({ ...rest })),
+    ink: ink.slice()
+  });
+
+  function updateHistoryButtons() {
+    $('#undo').disabled = !undoStack.length;
+    $('#redo').disabled = !redoStack.length;
+  }
+
+  function record() {
+    undoStack.push(snapshot());
+    if (undoStack.length > 80) undoStack.shift();
+    redoStack.length = 0;
+    updateHistoryButtons();
+  }
+
+  // Typing and sliders fire many times; one undo step per burst.
+  function recordCoalesced() {
+    if (!coalesceTimer) record();
+    clearTimeout(coalesceTimer);
+    coalesceTimer = setTimeout(() => { coalesceTimer = 0; }, 900);
+  }
+
+  function restore(snap) {
+    select(null);
+    for (const item of items.values()) item.el.remove();
+    items.clear();
+    for (const data of snap.items) addItem({ ...data }, { selectIt: false, record: false });
+    ink = snap.ink.slice();
+    renderInk();
+    save();
+  }
+
+  function undo() {
+    if (!undoStack.length) return;
+    redoStack.push(snapshot());
+    restore(undoStack.pop());
+    updateHistoryButtons();
+  }
+
+  function redo() {
+    if (!redoStack.length) return;
+    undoStack.push(snapshot());
+    restore(redoStack.pop());
+    updateHistoryButtons();
+  }
+
+  // ---------- Ink layer ----------
+  function addInkEl(stroke) {
+    const path = document.createElementNS(SVG_NS, 'path');
+    path.setAttribute('d', GI.pathD(stroke));
+    path.setAttribute('fill', stroke.c);
+    if (stroke.h) path.setAttribute('class', 'is-marker');
+    inkSvg.append(path);
+    inkEls.set(stroke, path);
+    return path;
+  }
+
+  function renderInk() {
+    inkSvg.replaceChildren();
+    for (const stroke of ink) addInkEl(stroke);
   }
 
   // ---------- Pan & zoom ----------
@@ -177,17 +272,20 @@
     el.append(del, handle);
 
     el.addEventListener('pointerdown', e => {
-      if (e.button !== 0) return;
+      if (e.button !== 0 && e.pointerType !== 'pen') return;
+      if (inkMode(e)) return; // annotating: let the canvas take this stroke, even over an item
       e.stopPropagation();
       if (e.target.closest('.item-del')) return;
       select(item.id);
+      const base = { item, pid: e.pointerId, sx: e.clientX, sy: e.clientY, x0: e.clientX, y0: e.clientY, moved: false };
       drag = e.target.closest('.item-resize')
-        ? { kind: 'resize', item, sx: e.clientX, sy: e.clientY, w: item.w, h: item.h }
-        : { kind: 'move', item, sx: e.clientX, sy: e.clientY, x: item.x, y: item.y };
+        ? { ...base, kind: 'resize', w: item.w, h: item.h }
+        : { ...base, kind: 'move', x: item.x, y: item.y };
       viewport.setPointerCapture(e.pointerId);
     });
 
-    el.addEventListener('focus', () => select(item.id));
+    // Focus selects (keyboard users), but a pen or mouse press while inking must not.
+    el.addEventListener('focus', () => { if (tool === 'select') select(item.id); });
     el.addEventListener('keydown', e => {
       const moves = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
       const move = moves[e.key];
@@ -205,13 +303,17 @@
     return el;
   }
 
-  function addItem(data, { selectIt = true } = {}) {
+  function addItem(data, { selectIt = true, record: rec = true } = {}) {
+    if (rec) record();
     const item = { id: `i${Date.now().toString(36)}${(uid++).toString(36)}`, z: ++zCounter, ...data };
     items.set(item.id, item);
     buildEl(item);
     fit(item);
     paint(item);
-    if (selectIt) select(item.id);
+    if (selectIt) {
+      select(item.id);
+      if (item.type !== 'art') inspector.classList.remove('is-collapsed');
+    }
     save();
     return item;
   }
@@ -219,16 +321,23 @@
   function removeItem(id) {
     const item = items.get(id);
     if (!item) return;
+    record();
     item.el.remove();
     items.delete(id);
     if (selectedId === id) select(null);
     save();
   }
 
+  // On a small screen, new things start smaller so they fit in view (and shrink with zoom-in).
+  function fitCells(wanted) {
+    const room = Math.min(viewport.clientWidth, viewport.clientHeight * 0.8) * 0.8 / scale;
+    return Math.max(6, Math.min(wanted, Math.floor(room / CELL)));
+  }
+
   function addArt(sceneId, worldX, worldY, extra = {}) {
     const scene = sceneById[sceneId];
     if (!scene) return;
-    const size = ART_CELLS * CELL;
+    const size = fitCells(ART_CELLS) * CELL;
     return addItem({
       type: 'art', scene: sceneId, seed: scene.seed,
       x: worldX - size / 2, y: worldY - size / 2, w: size, h: size, ...extra
@@ -237,10 +346,13 @@
 
   function addEquation(presetId, worldX, worldY) {
     const preset = GM.PRESETS.find(p => p.id === presetId) || GM.PRESETS[0];
-    const w = preset.cells[0] * CELL;
-    const h = preset.cells[1] * CELL;
+    // Smaller on a phone: shrink the box and the graph scale together so the plot still fits.
+    // Halving keeps the tick numbers round (every 2 cells = 4, 8, 12…) instead of 6.15 and 12.31.
+    const ratio = fitCells(preset.cells[0]) >= preset.cells[0] ? 1 : 0.5;
+    const w = Math.round(preset.cells[0] * ratio) * CELL;
+    const h = Math.round(preset.cells[1] * ratio) * CELL;
     return addItem({
-      type: 'eq', text: preset.text, cpu: preset.cpu, rough: 1.2, wob: rand32(),
+      type: 'eq', text: preset.text, cpu: preset.cpu * ratio, rough: 1.2, wob: rand32(),
       axes: true, ticks: true, labels: false,
       x: worldX - w / 2, y: worldY - h / 2, w, h
     });
@@ -249,7 +361,7 @@
   const INK = GM.COLORS[0];
 
   function addText(worldX, worldY, text = '') {
-    const w = 24 * CELL;
+    const w = fitCells(24) * CELL;
     const item = addItem({
       type: 'text', text, size: 2, color: INK, rough: 1.2, wob: rand32(),
       x: worldX, y: worldY, w, h: 2 * CELL
@@ -426,6 +538,7 @@
   function withEq(fn) {
     const item = items.get(selectedId);
     if (!item || item.type !== 'eq') return;
+    recordCoalesced();
     fn(item);
     drawEq(item);
     showErrors(item);
@@ -459,6 +572,7 @@
   function withText(fn) {
     const item = items.get(selectedId);
     if (!item || item.type !== 'text') return;
+    recordCoalesced();
     fn(item);
     drawText(item);
     syncInspectorSize(item);
@@ -488,6 +602,7 @@
   $('#art-variation').addEventListener('click', () => {
     const item = items.get(selectedId);
     if (!item || item.type !== 'art') return;
+    record();
     item.seed = rand32();
     drawArt(item);
     syncInspector();
@@ -496,6 +611,7 @@
   $('#art-original').addEventListener('click', () => {
     const item = items.get(selectedId);
     if (!item || item.type !== 'art') return;
+    record();
     item.seed = sceneById[item.scene].seed;
     drawArt(item);
     syncInspector();
@@ -534,25 +650,124 @@
     }, 'image/png');
   });
 
-  // ---------- Pointer handling (pan / move / resize) ----------
+  // ---------- Pointer handling: pan, move, resize, pinch and ink ----------
+  const touches = new Map();
+  let pinch = null;
+  let penDown = false;
+  let lastPenUp = 0;
+  let inkGesture = null;
+  let lastTap = null;
+  let lastDoubleTap = 0;
+
+  const effectiveTool = e => (e.pointerType === 'pen' && tool === 'select' && !penLocked ? 'pen' : tool);
+
+  // 'draw' | 'erase' | null — what this pointer should do on the canvas right now.
+  function inkMode(e) {
+    const pen = e.pointerType === 'pen';
+    if (pen && (e.buttons & (2 | 32))) return 'erase'; // the pen's side button, or its eraser end
+    const t = effectiveTool(e);
+    if (t === 'select') return null;
+    const canInk = pen || e.pointerType === 'mouse' || (e.pointerType === 'touch' && fingerInk);
+    if (!canInk) return null;
+    return t === 'eraser' ? 'erase' : 'draw';
+  }
+
+  // Capture phase, so it runs before any item sees the touch: palm rejection and pinch.
   viewport.addEventListener('pointerdown', e => {
-    if (e.button !== 0) return;
+    if (e.pointerType === 'pen') { penDown = true; return; }
+    if (e.pointerType !== 'touch') return;
+    if (penDown || performance.now() - lastPenUp < 450) {
+      e.stopPropagation(); // a resting palm, not a finger
+      e.preventDefault();
+      return;
+    }
+    touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (touches.size === 2) beginPinch();
+    if (touches.size >= 2) e.stopPropagation();
+  }, true);
+
+  const pointerEnd = e => {
+    if (e.pointerType === 'pen') {
+      penDown = false;
+      lastPenUp = performance.now();
+    } else if (e.pointerType === 'touch') {
+      touches.delete(e.pointerId);
+      if (pinch && touches.size < 2) pinch = null;
+    }
+  };
+  window.addEventListener('pointerup', pointerEnd, true);
+  window.addEventListener('pointercancel', pointerEnd, true);
+
+  function beginPinch() {
+    cancelGestures();
+    const [a, b] = [...touches.values()];
+    pinch = { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2, scale, panX, panY };
+  }
+
+  function updatePinch() {
+    const [a, b] = [...touches.values()];
+    if (!a || !b) return;
+    const d = Math.hypot(a.x - b.x, a.y - b.y) || 1;
+    const mx = (a.x + b.x) / 2;
+    const my = (a.y + b.y) / 2;
+    const rect = viewport.getBoundingClientRect();
+    const next = clamp((pinch.scale * d) / pinch.d, MIN_SCALE, MAX_SCALE);
+    // The spot that began under the fingers' midpoint stays under it.
+    const wx = (pinch.mx - rect.left - pinch.panX) / pinch.scale;
+    const wy = (pinch.my - rect.top - pinch.panY) / pinch.scale;
+    scale = next;
+    panX = mx - rect.left - wx * next;
+    panY = my - rect.top - wy * next;
+    apply();
+  }
+
+  // A second finger landed: whatever one finger was doing is over.
+  function cancelGestures() {
+    if (inkGesture) endInk(true);
+    if (drag) finishDrag();
+  }
+
+  viewport.addEventListener('pointerdown', e => {
+    if (e.button !== 0 && e.pointerType !== 'pen') return;
+    if (pinch) return;
+    const mode = inkMode(e);
+    if (mode) { beginInk(e, mode); return; }
     select(null);
-    drag = { kind: 'pan', sx: e.clientX - panX, sy: e.clientY - panY };
+    drag = {
+      kind: 'pan', pid: e.pointerId, sx: e.clientX - panX, sy: e.clientY - panY,
+      x0: e.clientX, y0: e.clientY, t0: performance.now(), moved: false
+    };
     viewport.classList.add('is-dragging');
     viewport.setPointerCapture(e.pointerId);
   });
 
+  // Pen barrel button and long-press would otherwise open the browser's menu.
+  viewport.addEventListener('contextmenu', e => e.preventDefault());
+
   viewport.addEventListener('dblclick', e => {
+    if (performance.now() - lastDoubleTap < 700) return; // already handled as a double-tap
     const hit = e.target.closest('.grid-item');
     if (hit) {
       const item = items.get(hit.dataset.id);
       if (item && item.type === 'text') textFields.text.focus();
       return;
     }
+    if (tool !== 'select') return;
     const p = clientToWorld(e.clientX, e.clientY);
     addText(snap(p.x), snap(p.y));
   });
+
+  function registerTap(e) {
+    const now = performance.now();
+    if (lastTap && now - lastTap.t < 380 && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 40) {
+      lastTap = null;
+      lastDoubleTap = now;
+      const p = clientToWorld(e.clientX, e.clientY);
+      addText(snap(p.x), snap(p.y));
+    } else {
+      lastTap = { t: now, x: e.clientX, y: e.clientY };
+    }
+  }
 
   let redrawQueued = false;
   function queueRedraw(item) {
@@ -568,8 +783,90 @@
     else $('#art-meta').textContent = `${size} · seed ${item.seed}${item.seed === sceneById[item.scene].seed ? ' (original)' : ''}`;
   }
 
+  // ----- Ink gestures -----
+  const round1 = v => Math.round(v * 10) / 10;
+
+  function beginInk(e, mode) {
+    if (e.pointerType === 'pen' && tool === 'select' && !penLocked) {
+      showPenBar(true);
+      setTool('pen');
+      if (!penToastShown) {
+        penToastShown = true;
+        toast('Pen tools on. Fingers still pan, pinch and move things.');
+      }
+    }
+    select(null);
+    viewport.setPointerCapture(e.pointerId);
+    inkGesture = { pid: e.pointerId, mode, stroke: null, path: null, erased: false };
+    if (mode === 'draw') {
+      const marker = tool === 'highlighter';
+      const px = marker ? MARKER_SIZES[inkStyle.size] : PEN_SIZES[inkStyle.size];
+      inkGesture.stroke = { c: inkStyle.color, w: round1((px / scale) * 100) / 100, h: marker ? 1 : 0, p: [] };
+      inkGesture.path = document.createElementNS(SVG_NS, 'path');
+      inkGesture.path.setAttribute('fill', inkStyle.color);
+      if (marker) inkGesture.path.setAttribute('class', 'is-marker');
+      inkSvg.append(inkGesture.path);
+    }
+    addInkPoints(e);
+  }
+
+  function addInkPoints(e) {
+    const g = inkGesture;
+    const batch = e.getCoalescedEvents ? e.getCoalescedEvents() : [];
+    for (const ev of batch.length ? batch : [e]) {
+      const w = clientToWorld(ev.clientX, ev.clientY);
+      if (g.mode === 'erase') { eraseAt(w.x, w.y); continue; }
+      const p = g.stroke.p;
+      const n = p.length;
+      if (n >= 3 && (w.x - p[n - 3]) ** 2 + (w.y - p[n - 2]) ** 2 < (0.9 / scale) ** 2) continue;
+      const pressure = ev.pointerType === 'pen' ? ev.pressure || 0.5 : 0.5;
+      p.push(round1(w.x), round1(w.y), Math.round(pressure * 100) / 100);
+    }
+    if (g.mode === 'draw') g.path.setAttribute('d', GI.pathD(g.stroke));
+  }
+
+  function eraseAt(x, y) {
+    const radius = 12 / scale;
+    for (let i = ink.length - 1; i >= 0; i--) {
+      if (!GI.hits(ink[i], x, y, radius)) continue;
+      if (!inkGesture.erased) { record(); inkGesture.erased = true; }
+      const [gone] = ink.splice(i, 1);
+      const path = inkEls.get(gone);
+      if (path) path.remove();
+    }
+  }
+
+  function endInk(discard) {
+    const g = inkGesture;
+    inkGesture = null;
+    if (!g) return;
+    try { viewport.releasePointerCapture(g.pid); } catch (_) { /* already released */ }
+    if (g.mode === 'draw') {
+      if (discard || !g.stroke.p.length) {
+        g.path.remove();
+      } else {
+        record();
+        ink.push(g.stroke);
+        inkEls.set(g.stroke, g.path);
+      }
+    }
+    save();
+  }
+
+  // ----- Move / resize / pan -----
   viewport.addEventListener('pointermove', e => {
-    if (!drag) return;
+    if (touches.has(e.pointerId)) touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pinch) { updatePinch(); return; }
+    if (inkGesture) {
+      if (e.pointerId === inkGesture.pid) addInkPoints(e);
+      return;
+    }
+    if (!drag || e.pointerId !== drag.pid) return;
+    if (!drag.moved) {
+      if (Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) < 4) return;
+      drag.moved = true;
+      if (drag.kind !== 'pan') record();
+    }
     if (drag.kind === 'pan') {
       panX = e.clientX - drag.sx;
       panY = e.clientY - drag.sy;
@@ -600,17 +897,25 @@
     if (item.id === selectedId) syncInspectorSize(item);
   });
 
-  const stopDrag = e => {
-    if (!drag) return;
+  function finishDrag(e) {
     const finished = drag;
+    if (!finished) return;
     drag = null;
     viewport.classList.remove('is-dragging');
-    try { viewport.releasePointerCapture(e.pointerId); } catch (_) { /* already released */ }
+    try { viewport.releasePointerCapture(finished.pid); } catch (_) { /* already released */ }
     if (finished.kind === 'resize' && finished.item.type !== 'art') paint(finished.item);
+    if (e && tool === 'select' && finished.kind === 'pan' && !finished.moved && e.pointerType === 'touch' && performance.now() - finished.t0 < 350) {
+      registerTap(e);
+    }
     save();
+  }
+
+  const stopPointer = e => {
+    if (inkGesture && e.pointerId === inkGesture.pid) { endInk(e.type === 'pointercancel'); return; }
+    if (drag && e.pointerId === drag.pid) finishDrag(e);
   };
-  viewport.addEventListener('pointerup', stopDrag);
-  viewport.addEventListener('pointercancel', stopDrag);
+  viewport.addEventListener('pointerup', stopPointer);
+  viewport.addEventListener('pointercancel', stopPointer);
 
   // Wheel / trackpad scroll pans; Ctrl (or pinch) + wheel zooms.
   viewport.addEventListener('wheel', e => {
@@ -637,7 +942,11 @@
 
   document.addEventListener('keydown', e => {
     const typing = e.target.closest && e.target.closest('input, textarea, select, button, a');
-    if (e.key === 'Escape') {
+    const editing = e.target.closest && e.target.closest('input, textarea, select'); // text fields keep their own undo
+    if ((e.ctrlKey || e.metaKey) && !editing && ['z', 'y'].includes(e.key.toLowerCase())) {
+      e.preventDefault();
+      if (e.key.toLowerCase() === 'y' || e.shiftKey) redo(); else undo();
+    } else if (e.key === 'Escape') {
       if (!pop.hidden) closePop(); else select(null);
     } else if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId && !typing) {
       e.preventDefault();
@@ -650,12 +959,14 @@
 
   function openPop(panel) {
     pop.hidden = false;
+    penBar.hidden = true;
     for (const section of pop.querySelectorAll('[data-panel]')) section.hidden = section.dataset.panel !== panel;
     for (const [name, btn] of Object.entries(trayButtons)) btn.setAttribute('aria-expanded', String(name === panel));
   }
 
   function closePop() {
     pop.hidden = true;
+    penBar.hidden = !penBarOpen;
     for (const btn of Object.values(trayButtons)) btn.setAttribute('aria-expanded', 'false');
   }
 
@@ -673,7 +984,96 @@
     closePop();
     const c = viewCenter();
     const p = clientToWorld(c.x, c.y);
-    addText(snap(p.x - 12 * CELL), snap(p.y - CELL));
+    addText(snap(p.x - (fitCells(24) * CELL) / 2), snap(p.y - CELL));
+  });
+
+  // ---------- Pen bar ----------
+  const trayPen = $('#tray-pen');
+  const sizeBtns = [];
+  const colorBtns = [];
+
+  function setTool(next) {
+    tool = next;
+    for (const name of ['select', 'pen', 'highlighter', 'eraser']) viewport.classList.toggle(`tool-${name}`, name === next);
+    for (const btn of penBar.querySelectorAll('[data-tool]')) btn.setAttribute('aria-pressed', String(btn.dataset.tool === next));
+    if (next !== 'select') select(null);
+    renderSizes();
+  }
+
+  function showPenBar(open) {
+    penBarOpen = open;
+    penBar.hidden = !open || !pop.hidden;
+    trayPen.setAttribute('aria-pressed', String(open));
+  }
+
+  function renderSizes() {
+    const marker = tool === 'highlighter';
+    sizeBtns.forEach((btn, i) => {
+      const px = marker ? MARKER_SIZES[i] : PEN_SIZES[i];
+      btn.firstElementChild.style.width = btn.firstElementChild.style.height = `${Math.min(22, 4 + px * (marker ? 0.45 : 1.6))}px`;
+      btn.setAttribute('aria-pressed', String(i === inkStyle.size));
+    });
+  }
+
+  trayPen.addEventListener('click', () => {
+    penLocked = false;
+    if (penBarOpen) { showPenBar(false); setTool('select'); } else { closePop(); showPenBar(true); setTool('pen'); }
+  });
+
+  for (const btn of penBar.querySelectorAll('[data-tool]')) {
+    btn.addEventListener('click', () => {
+      penLocked = btn.dataset.tool === 'select';
+      setTool(btn.dataset.tool);
+    });
+  }
+
+  for (const color of GM.COLORS) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'pen-swatch';
+    btn.style.background = color;
+    btn.setAttribute('aria-label', `Ink ${color}`);
+    btn.addEventListener('click', () => {
+      inkStyle.color = color;
+      colorBtns.forEach(b => b.setAttribute('aria-pressed', String(b === btn)));
+      if (tool === 'select' || tool === 'eraser') { penLocked = false; setTool('pen'); }
+    });
+    colorBtns.push(btn);
+    $('#pen-colors').append(btn);
+  }
+  colorBtns[0].setAttribute('aria-pressed', 'true');
+
+  PEN_SIZES.forEach((_, i) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.setAttribute('aria-label', ['Thin', 'Medium', 'Thick'][i]);
+    btn.append(document.createElement('i'));
+    btn.addEventListener('click', () => { inkStyle.size = i; renderSizes(); });
+    sizeBtns.push(btn);
+    $('#pen-sizes').append(btn);
+  });
+
+  $('#pen-finger').addEventListener('click', e => {
+    fingerInk = !fingerInk;
+    e.currentTarget.setAttribute('aria-pressed', String(fingerInk));
+    toast(fingerInk ? 'Finger draws now. Use two fingers to pan and zoom.' : 'Only the pen draws. Fingers pan, pinch and move things.');
+  });
+
+  $('#pen-clear').addEventListener('click', () => {
+    if (!ink.length) return;
+    record();
+    ink = [];
+    renderInk();
+    save();
+    toast('Ink cleared. Undo brings it back.');
+  });
+
+  $('#undo').addEventListener('click', undo);
+  $('#redo').addEventListener('click', redo);
+
+  $('#insp-collapse').addEventListener('click', () => {
+    const collapsed = inspector.classList.toggle('is-collapsed');
+    $('#insp-collapse').setAttribute('aria-expanded', String(!collapsed));
   });
 
   $('#zoom-in').addEventListener('click', () => { const c = viewCenter(); zoomAt(scale * 1.25, c.x, c.y); });
@@ -705,6 +1105,11 @@
       }
     };
 
+    const placeAndClose = (x, y) => {
+      place(x, y);
+      if (window.matchMedia('(max-width: 700px)').matches) closePop(); // the sheet covers the canvas on a phone
+    };
+
     const finish = ev => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', finish);
@@ -712,7 +1117,7 @@
       if (!ghost) {
         const c = viewCenter();
         const w = clientToWorld(c.x, c.y);
-        place(w.x, w.y);
+        placeAndClose(w.x, w.y);
         return;
       }
       ghost.remove();
@@ -721,7 +1126,7 @@
       pop.classList.remove('is-dragging');
       if (!over || !viewport.contains(over)) return;
       const w = clientToWorld(ev.clientX, ev.clientY);
-      place(w.x, w.y);
+      placeAndClose(w.x, w.y);
     };
 
     window.addEventListener('pointermove', move);
@@ -752,7 +1157,7 @@
     label.textContent = scene.title;
     btn.append(img, label);
     const place = (x, y) => addArt(scene.id, x, y);
-    btn.addEventListener('pointerdown', e => trayDrag(e, { cellsW: ART_CELLS, cellsH: ART_CELLS, ghostImage: scene.thumb, place }));
+    btn.addEventListener('pointerdown', e => trayDrag(e, { get cellsW() { return fitCells(ART_CELLS); }, get cellsH() { return fitCells(ART_CELLS); }, ghostImage: scene.thumb, place }));
     tapToPlace(btn, place);
     $('#pop-art').append(btn);
   }
@@ -782,8 +1187,11 @@
 
   // ---------- Start ----------
   window.addEventListener('resize', apply);
+  if (window.matchMedia('(max-width: 700px)').matches) inspector.classList.add('is-collapsed');
   const saved = load();
   if (saved) {
+    ink = (Array.isArray(saved.ink) ? saved.ink : []).filter(st => st && Array.isArray(st.p) && st.p.length % 3 === 0 && typeof st.c === 'string');
+    renderInk();
     for (const data of saved.items) {
       if (data.type === 'art' && !sceneById[data.scene]) continue;
       if (!['art', 'eq', 'text'].includes(data.type)) continue;
@@ -802,4 +1210,6 @@
   } else {
     center(1);
   }
+  renderSizes();
+  updateHistoryButtons();
 })();

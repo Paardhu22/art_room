@@ -3,7 +3,11 @@
   height: 100vh;
   height: 100dvh;
   overflow: hidden;
+  overscroll-behavior: none; /* no pull-to-refresh while drawing */
+  -webkit-touch-callout: none;
 }
+
+html:has(.art-grid-body) { overscroll-behavior: none; }
 
 .canvas-viewport {
   position: absolute;
@@ -376,3 +380,131 @@
 
 .insp-swatches button:hover { transform: scale(1.12); }
 .insp-swatches button[aria-pressed='true'] { box-shadow: 0 0 0 2px var(--olive); }
+
+/* ---------- Ink layer ---------- */
+.ink-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 100000;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.ink-layer .is-marker { opacity: 0.35; mix-blend-mode: multiply; }
+
+.canvas-viewport.tool-pen,
+.canvas-viewport.tool-highlighter { cursor: crosshair; }
+.canvas-viewport.tool-eraser { cursor: cell; }
+
+/* ---------- Pen bar ---------- */
+.grid-pen {
+  position: fixed;
+  left: 50%;
+  bottom: calc(76px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 19;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 4px 6px;
+  max-width: calc(100% - 16px);
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background: rgba(255, 253, 248, 0.94);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 6px 26px rgba(54, 57, 48, 0.14);
+}
+
+.pen-group { display: flex; align-items: center; gap: 2px; }
+.pen-sep { width: 1px; height: 22px; background: var(--line); }
+
+.pen-group button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  color: var(--ink);
+  transition: background 0.15s;
+}
+
+.pen-group button:hover { background: var(--wash); }
+.pen-group button[aria-pressed='true'] { background: var(--olive-soft); color: var(--olive); }
+.pen-group button svg { width: 18px; height: 18px; }
+
+.pen-group .pen-swatch {
+  width: 28px;
+  height: 28px;
+  margin: 4px 1px;
+  border: 2px solid var(--surface);
+  box-shadow: 0 0 0 1px var(--line);
+}
+
+.pen-group .pen-swatch[aria-pressed='true'] { box-shadow: 0 0 0 2px var(--olive); background-clip: padding-box; }
+
+#pen-sizes i {
+  display: block;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* ---------- Inspector: collapse ---------- */
+.insp-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.insp-head .insp-title { margin-bottom: 12px; }
+
+.insp-collapse {
+  display: none;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: var(--muted);
+}
+
+.insp-collapse svg { width: 18px; height: 18px; transition: transform 0.2s; }
+.insp-collapse:hover { background: var(--wash); }
+.grid-inspector.is-collapsed .insp-collapse svg { transform: rotate(180deg); }
+.grid-inspector.is-collapsed > section,
+.grid-inspector.is-collapsed > .insp-foot { display: none; }
+.grid-inspector.is-collapsed .insp-title { margin-bottom: 0; }
+
+/* ---------- Phones and tablets ---------- */
+@media (max-width: 700px) {
+  .insp-collapse { display: inline-flex; }
+  .grid-inspector { padding: 12px 14px; bottom: calc(68px + env(safe-area-inset-bottom)); }
+  .grid-tray { bottom: calc(10px + env(safe-area-inset-bottom)); }
+  .tray-zoomset { display: none; }
+  .grid-pop { bottom: calc(68px + env(safe-area-inset-bottom)); }
+  .grid-pen { bottom: calc(68px + env(safe-area-inset-bottom)); }
+  .grid-toast { bottom: calc(132px + env(safe-area-inset-bottom)); }
+  .pen-sep { display: none; }
+}
+
+/* Fingers and pens need bigger targets than a mouse. */
+@media (pointer: coarse) {
+  .tray-btn { min-height: 44px; }
+  .tray-icon { width: 40px; height: 40px; }
+  .pen-group button { width: 42px; height: 42px; }
+  .pen-group .pen-swatch { width: 32px; height: 32px; margin: 5px 2px; }
+  .item-del { top: -18px; right: -18px; width: 36px; height: 36px; }
+  .item-del svg { width: 16px; height: 16px; }
+  .item-resize { right: -14px; bottom: -14px; width: 28px; height: 28px; border-radius: 7px; }
+  .insp-btn { padding: 12px 10px; font-size: 12px; }
+  .insp-field select,
+  .insp-field input[type='number'],
+  .insp-text { font-size: 16px; } /* stops mobile browsers zooming in on focus */
+  .pop-art button,
+  .pop-eq button { padding: 8px; }
+}
+
+@media (max-width: 700px) {
+  .pop-art { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .pop-art span { font-size: 10px; }
+}
