@@ -1,0 +1,106 @@
+/* Shared top dock — a small, near-invisible nav pill used on every page */
+.site-dock {
+  position: fixed;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  max-width: calc(100% - 24px);
+  padding: 8px 10px 8px 18px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: rgba(248, 246, 240, 0.5);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  opacity: 0.5;
+  font-family: var(--sans, Manrope, system-ui, sans-serif);
+  transition: opacity 0.25s ease, background 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.site-dock:hover,
+.site-dock:focus-within {
+  opacity: 1;
+  background: rgba(255, 253, 248, 0.88);
+  border-color: #e2e2d7;
+  box-shadow: 0 6px 26px rgba(54, 57, 48, 0.12);
+}
+
+.site-dock .dock-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font: 22px/1 Georgia, 'Times New Roman', serif;
+  letter-spacing: -0.9px;
+  color: #363930;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.site-dock .dock-brand img {
+  display: block;
+  width: 26px;
+  height: 26px;
+  mix-blend-mode: multiply;
+}
+
+.site-dock .dock-brand b {
+  font-weight: 400;
+  color: #63684c;
+}
+
+.site-dock .dock-links {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 550;
+}
+
+.site-dock .dock-links a {
+  padding: 7px 14px;
+  border-radius: 999px;
+  color: #6e7265;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background 0.2s, color 0.2s;
+}
+
+.site-dock .dock-links a:hover {
+  background: #e9ebdf;
+  color: #363930;
+}
+
+.site-dock .dock-links a[aria-current] {
+  background: #e9ebdf;
+  color: #363930;
+}
+
+.site-dock a:focus-visible {
+  outline: 2px solid #63684c;
+  outline-offset: 2px;
+}
+
+/* Pages with a dock reserve a strip at the top so content never sits under it */
+body.has-dock {
+  padding-top: 78px;
+}
+
+html {
+  scroll-padding-top: 88px;
+}
+
+@media (max-width: 700px) {
+  .site-dock { gap: 8px; padding-left: 12px; top: 10px; }
+  .site-dock .dock-brand span { display: none; }
+  .site-dock .dock-links { font-size: 12px; }
+  .site-dock .dock-links a { padding: 7px 10px; }
+  .site-dock .dock-links a:last-child { display: none; }
+  body.has-dock { padding-top: 68px; }
+}
+
+@media (hover: none) {
+  .site-dock { opacity: 0.85; }
+}

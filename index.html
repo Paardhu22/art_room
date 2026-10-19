@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f8f6f0">
+  <meta name="description" content="Art Room — a personal collection of AI-assisted artwork, imagined places, botanical studies, and geometric explorations.">
+  <title>Art Room — A little room for imagination</title>
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="dock.css">
+  <script src="artworks.js" defer></script>
+  <script src="artwork/collection.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body class="has-dock">
+  <a class="skip-link" href="#collection">Skip to the artwork</a>
+  <nav class="site-dock" aria-label="Main navigation"><a class="dock-brand" href="index.html" aria-label="Art Room home"><img src="assets/favicon.svg" width="26" height="26" alt=""><span>art room<b>.</b></span></a><div class="dock-links"><a href="index.html#collection" aria-current="page">The collection</a><a href="art-grid.html">Art grid</a><a href="artwork/studio.html">Atelier</a><a href="index.html#about">A little about this</a></div></nav>
+
+  <main>
+    <section class="hero shell" aria-labelledby="hero-title">
+      <div class="hero-copy"><p class="eyebrow"><span class="tiny-star" aria-hidden="true">✳</span> A personal art archive</p><h1 id="hero-title">A little room<br>for <em>imagination.</em></h1></div>
+      <div class="hero-aside"><svg class="hero-flower" viewBox="0 0 130 130" fill="none" aria-hidden="true"><g stroke="currentColor" stroke-width="1.2"><ellipse cx="65" cy="65" rx="21" ry="49"/><ellipse cx="65" cy="65" rx="21" ry="49" transform="rotate(45 65 65)"/><ellipse cx="65" cy="65" rx="21" ry="49" transform="rotate(90 65 65)"/><ellipse cx="65" cy="65" rx="21" ry="49" transform="rotate(135 65 65)"/><circle cx="65" cy="65" r="9"/></g></svg><p>Imagined places. Natural patterns.<br> Small experiments that became<br> something worth keeping.</p><span class="collection-note"><span></span> An ongoing collection</span></div>
+    </section>
+
+    <section id="collection" class="collection shell" aria-labelledby="collection-title">
+      <div class="collection-heading"><div class="collection-title-wrap"><h2 id="collection-title">The collection</h2><span class="collection-total" id="collection-total">12</span></div><p>A few things to get lost in <span aria-hidden="true">↙</span></p></div>
+      <div class="collection-toolbar">
+        <div class="filters" role="group" aria-label="Filter artwork by subject">
+          <button class="filter is-active" data-filter="all" type="button" aria-pressed="true">All works</button>
+          <button class="filter" data-filter="places" type="button" aria-pressed="false">Places</button>
+          <button class="filter" data-filter="botanical" type="button" aria-pressed="false">Botanical</button>
+          <button class="filter" data-filter="geometry" type="button" aria-pressed="false">Geometry</button>
+        </div>
+        <div class="collection-tools"><label class="search-box"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 4.5 4.5"/></svg><input id="art-search" type="search" placeholder="Find something…" aria-label="Search the artwork" autocomplete="off"></label><span class="toolbar-divider"></span><div class="view-controls" role="group" aria-label="Collection layout"><button class="icon-button is-active" id="grid-view" type="button" aria-label="Gallery view" aria-pressed="true" title="Gallery view"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/></svg></button><button class="icon-button" id="list-view" type="button" aria-label="List view" aria-pressed="false" title="List view"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></svg></button></div></div>
+      </div>
+      <div class="results-bar"><span id="results-count" role="status" aria-live="polite">12 works to explore</span><label class="sort-control"><span class="sr-only">Sort artwork</span><select id="art-sort"><option value="curated">Curated order</option><option value="title">Title, A–Z</option></select><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg></label></div>
+      <div id="artwork-grid" class="artwork-grid"></div>
+      <div id="empty-state" class="empty-state" hidden><span aria-hidden="true">✳</span><h3>A little too quiet here.</h3><p>No artworks match this search. Try another word or explore the whole collection.</p><button class="text-button" id="reset-filters" type="button">Show all works <span aria-hidden="true">↗</span></button></div>
+      <noscript><div class="no-script"><p>Enable JavaScript to browse the collection and open the artwork viewer. You can also view the originals directly:</p><a href="assets/artworks/harbour-1200.webp">A harbour, in ink</a><a href="assets/artworks/botanical-1200.webp">Ananas comosus</a><a href="assets/artworks/fountain-1200.webp">Beneath the surface</a></div></noscript>
+      <div class="collection-end"><span class="end-line"></span><span>More little worlds to come</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M5.6 18.4 18.4 5.6"/></svg><span class="end-line"></span></div>
+    </section>
+
+    <aside id="about" class="about-collection shell" aria-labelledby="about-title"><span class="about-number">A NOTE ON THE COLLECTION</span><div><h2 id="about-title">A sketchbook, with the walls taken down.</h2><p>This is a space for AI-assisted experiments in ink, watercolour, and geometry. Some are imagined places. Some start with a pattern in nature. All of them invite a closer look.</p><a class="sketch-link" href="artwork/studio.html">Explore the JavaScript atelier <span aria-hidden="true">↗</span></a></div><span class="about-signoff">Always a work<br>in progress.<svg viewBox="0 0 78 30" aria-hidden="true"><path d="M2 14c16 15 43 12 63-2m-10-3 12 2-5 10"/></svg></span></aside>
+  </main>
+
+  <footer class="site-footer shell"><a class="wordmark footer-wordmark" href="#">art room<span class="brand-dot">.</span></a><p>A collection by Paardhiv Reddy Tumma</p><a href="#collection">Back to the art <span aria-hidden="true">↑</span></a></footer>
+
+  <dialog id="art-viewer" class="art-viewer" aria-labelledby="viewer-title" aria-describedby="viewer-description"><div class="viewer-panel"><div class="viewer-toolbar"><span class="viewer-label">A closer look <span id="viewer-position"></span></span><div class="viewer-actions"><button class="viewer-zoom text-button" id="viewer-zoom" type="button" aria-pressed="false">Zoom in</button><a id="viewer-sketch" class="icon-button" target="_blank" rel="noopener" aria-label="Open live JavaScript sketch in a new tab" title="Open live JavaScript sketch" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 6-6 6 6 6m8-12 6 6-6 6m-3-14-2 16"/></svg></a><a id="viewer-original" class="icon-button" target="_blank" rel="noopener" aria-label="Open original image in a new tab" title="Open original image"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M10 4H5a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-5"/></svg></a><button class="icon-button" id="viewer-close" type="button" aria-label="Close artwork" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div></div><div class="viewer-image-wrap" id="viewer-image-wrap" tabindex="0" role="region" aria-label="Artwork image; scroll to explore when zoomed"><img id="viewer-image" width="1200" height="1200" alt=""></div><div class="viewer-caption"><div><span class="art-category" id="viewer-category"></span><h2 id="viewer-title"></h2><p id="viewer-description"></p></div><div class="viewer-navigation"><button class="icon-button" id="viewer-previous" type="button" aria-label="Previous artwork"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 5-7 7 7 7"/></svg></button><button class="icon-button" id="viewer-next" type="button" aria-label="Next artwork"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m10 5 7 7-7 7"/></svg></button></div></div><p class="viewer-keyboard-hint">← → to wander <span>·</span> Esc to return</p></div></dialog>
+</body>
+</html>
