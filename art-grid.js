@@ -73,6 +73,7 @@
   const inkStyle = { color: GM.COLORS[0], size: 1 };
   const PEN_SIZES = [1.6, 3, 6]; // screen pixels
   const MARKER_SIZES = [12, 20, 32];
+  let phonePad = null; // a phone writing on this grid (grid-pad.js), once attached
 
   const rand32 = () => (crypto.getRandomValues(new Uint32Array(1))[0] || 1);
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
@@ -91,6 +92,7 @@
   // ---------- Persistence ----------
   let saveTimer = 0;
   function save() {
+    if (phonePad) phonePad.sync(); // the phone mirrors the ink, items and view
     clearTimeout(saveTimer);
     saveTimer = setTimeout(() => {
       try {
@@ -214,6 +216,22 @@
     panX = x - ((x - panX) * clamped) / scale;
     panY = y - ((y - panY) * clamped) / scale;
     scale = clamped;
+    apply();
+  }
+
+  // Fit everything on the board into view, or centre the empty canvas.
+  function showAll() {
+    const boxes = [...items.values()].map(i => [i.x, i.y, i.x + i.w, i.y + i.h]).concat(ink.map(GI.bounds));
+    if (!boxes.length) { center(1); return; }
+    const x0 = Math.min(...boxes.map(b => b[0]));
+    const y0 = Math.min(...boxes.map(b => b[1]));
+    const x1 = Math.max(...boxes.map(b => b[2]));
+    const y1 = Math.max(...boxes.map(b => b[3]));
+    const w = viewport.clientWidth;
+    const h = viewport.clientHeight;
+    scale = clamp(Math.min((w * 0.8) / (x1 - x0 || 1), (h * 0.7) / (y1 - y0 || 1), 1.5), MIN_SCALE, MAX_SCALE);
+    panX = w / 2 - ((x0 + x1) / 2) * scale;
+    panY = h / 2 - ((y0 + y1) / 2) * scale;
     apply();
   }
 
@@ -826,15 +844,18 @@
     if (g.mode === 'draw') g.path.setAttribute('d', GI.pathD(g.stroke));
   }
 
-  function eraseAt(x, y) {
-    const radius = 12 / scale;
+  // `gesture` remembers whether this stroke of the eraser has already made an undo step.
+  function eraseAt(x, y, gesture = inkGesture, radius = 12 / scale) {
+    let removed = 0;
     for (let i = ink.length - 1; i >= 0; i--) {
       if (!GI.hits(ink[i], x, y, radius)) continue;
-      if (!inkGesture.erased) { record(); inkGesture.erased = true; }
+      if (!gesture.erased) { record(); gesture.erased = true; }
       const [gone] = ink.splice(i, 1);
       const path = inkEls.get(gone);
       if (path) path.remove();
+      removed++;
     }
+    return removed;
   }
 
   function endInk(discard) {
@@ -1060,14 +1081,16 @@
     toast(fingerInk ? 'Finger draws now. Use two fingers to pan and zoom.' : 'Only the pen draws. Fingers pan, pinch and move things.');
   });
 
-  $('#pen-clear').addEventListener('click', () => {
+  function clearInk() {
     if (!ink.length) return;
     record();
     ink = [];
     renderInk();
     save();
     toast('Ink cleared. Undo brings it back.');
-  });
+  }
+
+  $('#pen-clear').addEventListener('click', clearInk);
 
   $('#undo').addEventListener('click', undo);
   $('#redo').addEventListener('click', redo);
@@ -1303,4 +1326,42 @@
   }
   renderSizes();
   updateHistoryButtons();
+
+  // ---------- Phone pad ----------
+  // A phone's pen samples become ink here, just like the pen tool's (see grid-pad.js).
+  if (window.GridPad) {
+    phonePad = window.GridPad.attach({
+      cell: CELL,
+      minScale: MIN_SCALE,
+      maxScale: MAX_SCALE,
+      colors: GM.COLORS,
+      penSizes: PEN_SIZES,
+      markerSizes: MARKER_SIZES,
+      world,
+      liveLayer: inkSvg,
+      view: () => ({ ox: -panX / scale, oy: -panY / scale, scale, w: viewport.clientWidth, h: viewport.clientHeight }),
+      setView(ox, oy, next) {
+        scale = clamp(next, MIN_SCALE, MAX_SCALE);
+        panX = -ox * scale;
+        panY = -oy * scale;
+        apply();
+      },
+      ink: () => ink,
+      items: () => [...items.values()].map(({ x, y, w, h }) => [x, y, w, h]),
+      commit(stroke, path) {
+        record();
+        ink.push(stroke);
+        path.setAttribute('d', GI.pathD(stroke));
+        inkEls.set(stroke, path);
+        save();
+      },
+      erase: (x, y, radius, gesture) => eraseAt(x, y, gesture, radius),
+      save,
+      undo,
+      redo,
+      clear: clearInk,
+      showAll,
+      toast
+    });
+  }
 })();

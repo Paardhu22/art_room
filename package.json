@@ -9,7 +9,7 @@
     "pad": "node scripts/serve.mjs --lan",
     "build": "node scripts/build.mjs",
     "preview": "node scripts/serve.mjs --dist",
-    "check": "node --check app.js && node --check art-grid.js && node --check grid-math.js && node --check grid-ink.js && node --check artworks.js && node --check pad/shared.js && node --check pad/pad.js && node --check scripts/pad-link.mjs && node --check scripts/serve.mjs && node --check scripts/build.mjs",
+    "check": "node --check app.js && node --check art-grid.js && node --check grid-math.js && node --check grid-ink.js && node --check grid-pad.js && node --check artworks.js && node --check pad/shared.js && node --check pad/qr.js && node --check pad/pad.js && node --check scripts/pad-link.mjs && node --check scripts/serve.mjs && node --check scripts/build.mjs",
     "render:artwork": "node scripts/render-artwork.mjs",
     "check:artwork": "node scripts/check-artwork.mjs"
   },

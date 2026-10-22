@@ -14,6 +14,9 @@
   <script src="artwork/collection.js" defer></script>
   <script src="grid-math.js" defer></script>
   <script src="grid-ink.js" defer></script>
+  <script src="pad/shared.js" defer></script>
+  <script src="pad/qr.js" defer></script>
+  <script src="grid-pad.js" defer></script>
   <script src="art-grid.js" defer></script>
 </head>
 <body class="art-grid-body">
@@ -137,7 +140,54 @@
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>
       </button>
     </div>
+    <span class="pen-sep" aria-hidden="true"></span>
+    <button type="button" class="pen-phone" id="pen-phone" aria-expanded="false" aria-controls="phone-pop" title="Write on your phone and see it here, over cable, Bluetooth or Wi‑Fi">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6.5" y="2.5" width="11" height="19" rx="2.5"/><path d="M10.5 18.5h3"/></svg>
+      <span>Phone pad</span>
+      <i class="phone-dot" id="phone-dot" data-tone="off" aria-hidden="true"></i>
+    </button>
   </div>
+
+  <section class="grid-phone" id="phone-pop" aria-labelledby="phone-title" hidden>
+    <div class="phone-head">
+      <div>
+        <p class="insp-kicker">Phone pad</p>
+        <h2 class="phone-title" id="phone-title">Write on your phone, see it here</h2>
+      </div>
+      <button class="phone-close" id="phone-close" type="button" aria-label="Close">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+      </button>
+    </div>
+    <div class="phone-modes" role="radiogroup" aria-label="How the phone connects">
+      <button type="button" role="radio" data-mode="cable" aria-checked="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 2.5h6v4.5H9zM7 7h10v5.5a5 5 0 0 1-10 0zM12 17.5v4"/></svg>
+        <span>Cable<small>Every pen sample</small></span>
+      </button>
+      <button type="button" role="radio" data-mode="bluetooth" aria-checked="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10-5 5V2l5 5L7 17"/></svg>
+        <span>Bluetooth<small>No wires</small></span>
+      </button>
+      <button type="button" role="radio" data-mode="wifi" aria-checked="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 9a14 14 0 0 1 19 0M5.5 12.5a9.5 9.5 0 0 1 13 0M8.8 16a4.8 4.8 0 0 1 6.4 0"/><path d="M12 19.5h.01" stroke-width="2.4"/></svg>
+        <span>Wi‑Fi<small>Same network</small></span>
+      </button>
+    </div>
+    <div class="phone-body">
+      <div class="phone-info">
+        <ol class="phone-steps" id="phone-steps"></ol>
+        <p class="phone-state" id="phone-state" data-tone="wait" role="status" aria-live="polite"></p>
+      </div>
+      <div class="phone-pair">
+        <div class="phone-qr" id="phone-qr" role="img" aria-label="QR code that opens the pen pad on your phone"></div>
+        <p class="phone-url" id="phone-url"></p>
+        <p class="phone-code">Code <b id="phone-code"></b></p>
+      </div>
+    </div>
+    <div class="phone-foot">
+      <span class="phone-status" id="phone-status"></span>
+      <button class="insp-btn" id="phone-off" type="button">Turn off</button>
+    </div>
+  </section>
 
   <div class="grid-tray" role="toolbar" aria-label="Canvas tools">
     <button class="tray-btn" id="tray-art" type="button" aria-expanded="false" aria-controls="tray-pop">
