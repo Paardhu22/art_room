@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#000000">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="description" content="Pen Pad — use your phone as a writing pad for the Art Room Art Grid.">
+  <title>Pen Pad — Art Room</title>
+  <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+  <link rel="stylesheet" href="pad.css">
+  <script src="../grid-ink.js" defer></script>
+  <script src="shared.js" defer></script>
+  <script src="pad.js" defer></script>
+</head>
+<body>
+  <div class="pad-bar" role="toolbar" aria-label="Pen pad">
+    <span class="pad-status" id="status" data-tone="wait" role="status" aria-live="polite"><i aria-hidden="true"></i><b id="status-text">Connecting…</b></span>
+    <div class="bar-group" role="group" aria-label="Tool">
+      <button type="button" data-tool="pen" aria-label="Pen" aria-pressed="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l1-4L16.5 4.5a2 2 0 0 1 3 3L8 19l-4 1z"/></svg>
+      </button>
+      <button type="button" data-tool="marker" aria-label="Marker" aria-pressed="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14l6-9 4 3-6 9zM9 14l-2 5 5-1M4 21h6"/></svg>
+      </button>
+      <button type="button" data-tool="eraser" aria-label="Eraser" aria-pressed="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 20h12M5.5 14.5l8-8a2 2 0 0 1 3 0l2 2a2 2 0 0 1 0 3l-7.5 7.5H9z"/></svg>
+      </button>
+      <button type="button" class="bar-style" id="style-btn" aria-label="Ink colour and size" aria-expanded="false" aria-controls="style-pop"><i></i></button>
+    </div>
+    <div class="bar-group" role="group" aria-label="History">
+      <button type="button" id="undo" aria-label="Undo">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7 4 12l5 5M4 12h11a5 5 0 0 1 0 10h-3"/></svg>
+      </button>
+      <button type="button" id="redo" aria-label="Redo">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 7 5 5-5 5M20 12H9a5 5 0 0 0 0 10h3"/></svg>
+      </button>
+      <button type="button" id="more-btn" aria-label="More" aria-expanded="false" aria-controls="more-pop">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h.01M12 12h.01M19 12h.01" stroke-width="3"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="pad-pop" id="style-pop" hidden>
+    <div class="pop-row" id="colors" role="group" aria-label="Ink colour"></div>
+    <div class="pop-row" id="sizes" role="group" aria-label="Size"></div>
+  </div>
+
+  <div class="pad-pop pad-menu" id="more-pop" hidden>
+    <button type="button" id="home">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M12 3v3.5M12 17.5V21M3 12h3.5M17.5 12H21"/></svg>
+      Show all the writing
+    </button>
+    <button type="button" id="finger" aria-pressed="false">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11V5a1.5 1.5 0 0 1 3 0v5m0 0V8.5a1.5 1.5 0 0 1 3 0V11m0-.5a1.5 1.5 0 0 1 3 0V15a6 6 0 0 1-6 6h-1a5 5 0 0 1-4-2l-3-4.5a1.5 1.5 0 0 1 2.4-1.8L9 15"/></svg>
+      <span>Fingers draw too</span>
+    </button>
+    <button type="button" id="fullscreen">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/></svg>
+      Full screen
+    </button>
+    <button type="button" id="clear" class="is-danger">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>
+      Clear all ink
+    </button>
+  </div>
+
+  <main class="pad-surface" id="surface" aria-label="Writing area. Write here to draw on the Art Grid.">
+    <canvas id="field" aria-hidden="true"></canvas>
+    <canvas id="canvas" aria-hidden="true"></canvas>
+    <p class="pad-note" id="note" hidden></p>
+    <p class="pad-turn" id="turn" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="8" width="18" height="11" rx="2"/><path d="M8 4.5a6 6 0 0 1 8.5 1M16.5 2.5v3h-3"/></svg>Turn the phone sideways for a bigger pad</p>
+  </main>
+
+  <section class="pad-gate" id="gate" aria-labelledby="gate-title" hidden>
+    <p class="gate-kicker">Art Room</p>
+    <h1 id="gate-title">Pen pad</h1>
+    <p>Type the code shown in the Art Grid’s Phone pad panel.</p>
+    <form id="gate-form" autocomplete="off">
+      <input id="gate-code" maxlength="8" spellcheck="false" autocapitalize="characters" autocorrect="off" aria-label="Pairing code" placeholder="CODE">
+      <button type="submit">Connect</button>
+    </form>
+  </section>
+</body>
+</html>
