@@ -26,6 +26,8 @@ Reload the browser after editing. If that port is occupied, use `PORT=4301 npm s
 - Escape to close, arrow keys to browse, focus restoration, and native modal focus containment.
 - Pure warm light theme; layout preferences are saved in this browser.
 - Art Grid page: an empty, large (finite) dot-grid canvas. Drag JavaScript artworks (drawn live, not images) onto it, add rough hand-drawn equation plots like `y = sin(x)`, type scribbled handwriting (double-click anywhere or use Write), and annotate with a pressure-sensitive pen. Everything snaps to the dots, works with touch and stylus, and the layout is saved in this browser. Export the whole board or one item as SVG.
+- Phone pad: write on the Art Grid from a phone (and its pen), connected by USB cable, Bluetooth or Wi‑Fi.
+  The phone becomes a dark writing pad with glowing blue dots; the ink lands on the grid. See below.
 - Responsive WebP images and reduced-motion support.
 - Nine live JavaScript sketches, with editable seeds and full-size PNG export.
 
@@ -84,6 +86,34 @@ seed changes small drawn details while preserving the scene's composition.
 With the built preview running, `npm run check:artwork` checks all nine sketches,
 repeatable output, seeded variation, the 12-piece collection, and viewer controls.
 `ART_ROOM_TEST_URL` changes the test server origin.
+
+## Phone pad
+
+On the Art Grid, turn on **Pen** and pick **Phone pad**. Choose how the phone connects, then scan the code
+with the phone. The phone becomes a writing pad: a dark copy of the grid's visible area, with blue dots that
+glow around the pen. What you write appears on the Art Grid as ordinary ink, in the grid's own colours and
+sizes, so undo, the eraser, saving and SVG export treat it like the pen tool's. Pen pressure carries through,
+and a small ring on the grid shows where the phone's pen is hovering. With a stylus, fingers pan and pinch the
+grid. Without one, one finger writes and two fingers move. The pen's eraser end or side button erases.
+
+```sh
+npm run pad      # like npm start, but phones on your network can reach it
+```
+
+- **Cable** (Android): turn on USB debugging and plug the phone in. While the Phone pad panel is open on
+  Cable, the server runs `adb reverse`, so the phone opens `localhost:4300/pad` over the cable. This is the
+  most precise link: the page counts as secure, so the browser hands over every pen sample
+  (`pointerrawupdate`) within a few milliseconds. `npm start` is enough for this mode. Without adb, USB
+  tethering (Android) or Personal Hotspot over the cable (iPhone) works with `npm run pad`.
+- **Bluetooth**: pair the phone, turn on Bluetooth tethering on it and join it from the computer. The panel
+  finds the Bluetooth network and shows its address. Browsers can't talk to each other over raw Bluetooth,
+  so the link runs over the Bluetooth network instead. It adds some delay.
+- **Wi‑Fi**: phone and computer on the same network.
+
+Several phones can write at once. The pairing code stays the same between visits, and the Phone pad stays
+on across reloads until you press **Turn off** in its panel. The link is a small dependency-free WebSocket
+relay in `scripts/pad-link.mjs`; `grid-pad.js` is the Art Grid's side and `pad/` is the phone's. A static host
+has no relay, so the phone pad only works with the local server.
 
 ## Build
 
